@@ -1,0 +1,21 @@
+# ── Etapa 1: Ingestão e Pré-processamento ──
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3
+pyarrow>=14.0          # para salvar/ler Parquet
+matplotlib>=3.7
+seaborn>=0.12
+
+# ── Interface (será usada nas etapas seguintes, mas já instalamos) ──
+streamlit>=1.30
+
+# ── Utilidades ──
+python-dotenv>=1.0
+
+# ── Testes ──
+pytest>=7.4
+
+# ── Futuro (não usar ainda, mas já documentado) ──
+# sentence-transformers>=2.2
+# chromadb>=0.4
+# ollama>=0.1
