@@ -1,13 +1,13 @@
 # Triagem Explicada de Incidentes de Rede com LLM e RAG Local
 
-**Projeto Transformador I** — Bacharelado em Ciência da Computação, PUCPR  
+**Projeto Transformador I** — Bacharelado em Ciência da Computação, PUCPR
 Turma 7B — Grupo 3
 
 ## Visão Geral
 
 Sistema local de triagem explicada de incidentes de rede, integrando um LLM
-especializado em cibersegurança (Foundation-Sec-8B) com RAG local para produzir
-classificações e explicações fundamentadas em MITRE ATT&CK e Sigma Rules.
+especializado em cibersegurança (Foundation-Sec-8B-Instruct) com RAG local para
+produzir classificações e explicações fundamentadas em MITRE ATT&CK e Sigma Rules.
 
 ## Estrutura do Projeto
 
@@ -15,44 +15,37 @@ classificações e explicações fundamentadas em MITRE ATT&CK e Sigma Rules.
 tcc-triagem/
 ├── data/
 │   ├── raw/                        # Datasets originais (não versionados)
-│   │   ├── cic-ids2017/            # CSVs do CIC-IDS2017
-│   │   └── unsw-nb15/              # CSVs do UNSW-NB15
-│   ├── processed/                  # Dados pré-processados (Parquet)
-│   │   ├── cic_ids2017_clean.parquet
-│   │   ├── unsw_nb15_clean.parquet
-│   │   ├── unified_dataset.parquet
-│   │   ├── normalization_params.json
-│   │   └── preprocessing_report.json
-│   └── rag/                        # Base de conhecimento RAG
+│   │   ├── cic-ids2017/
+│   │   └── unsw-nb15/
+│   ├── processed/                  # [Etapa 1] Dados pré-processados (Parquet)
+│   └── rag/                        # [Etapa 2] Base de conhecimento RAG
 │       ├── sources/                # MITRE ATT&CK JSON + Sigma Rules YAMLs
 │       └── chromadb/               # Base vetorial persistente
 ├── src/
 │   ├── config.py                   # Caminhos e parâmetros centralizados
-│   ├── main.py                     # Ponto de entrada
-│   ├── utils/logger.py             # Logger padronizado
+│   ├── utils/logger.py
 │   ├── data/                       # [Etapa 1] Ingestão e pré-processamento
-│   │   ├── loader.py               # Carregamento dos CSVs brutos
-│   │   ├── preprocessor.py         # Limpeza, normalização, encoding
-│   │   └── pipeline.py             # Orquestrador do pré-processamento
-│   ├── rag/                        # [Etapa 2] RAG - Base de conhecimento
-│   │   ├── download.py             # Download do MITRE ATT&CK e Sigma Rules
-│   │   ├── sources/mitre.py        # Parser do MITRE ATT&CK (STIX JSON)
-│   │   ├── sources/sigma.py        # Parser das Sigma Rules (YAML)
-│   │   ├── embeddings.py           # Geração de embeddings (sentence-transformers)
-│   │   ├── vectorstore.py          # Interface com ChromaDB
-│   │   ├── retriever.py            # Busca semântica na base RAG
-│   │   └── pipeline.py             # Orquestrador do pipeline RAG
-│   ├── llm/                        # [Futuro] Integração com LLM
-│   ├── app/                        # [Futuro] Interface Streamlit
-│   └── evaluation/                 # [Futuro] Métricas e avaliação
+│   │   ├── loader.py
+│   │   ├── preprocessor.py
+│   │   └── pipeline.py
+│   ├── rag/                        # [Etapa 2] Base RAG
+│   │   ├── download.py
+│   │   ├── sources/{mitre,sigma}.py
+│   │   ├── embeddings.py
+│   │   ├── vectorstore.py
+│   │   ├── retriever.py
+│   │   └── pipeline.py
+│   ├── llm/                        # [Etapa 3] Triagem com LLM
+│   │   ├── text_converter.py       # Registro → descrição textual
+│   │   ├── llm_client.py           # Cliente Ollama
+│   │   ├── prompts.py              # Templates de prompts
+│   │   ├── triage.py               # Orquestrador RAG + LLM
+│   │   └── pipeline.py             # CLI da etapa 3
+│   ├── app/                        # [Etapa 4] Interface Streamlit
+│   └── evaluation/                 # [Etapa 4] Métricas e avaliação
 ├── tests/
-│   ├── test_preprocessor.py        # Testes do pré-processamento
-│   └── test_rag_parsing.py         # Testes do parsing RAG (sem GPU)
-├── notebooks/                      # Análise exploratória
-├── docs/                           # Documentação
-├── outputs/                        # Resultados e figuras
+├── outputs/                        # Resultados de triagens
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
@@ -71,124 +64,176 @@ pip install -r requirements.txt
 
 ### 1.1 Obter os Datasets
 
-**CIC-IDS2017:**
-- Acessar https://www.unb.ca/cic/datasets/ids-2017.html
-- Preencher o formulário (o link de download chega por email)
-- Colocar todos os CSVs em `data/raw/cic-ids2017/`
+**CIC-IDS2017:** https://www.unb.ca/cic/datasets/ids-2017.html → CSVs em `data/raw/cic-ids2017/`
 
-**UNSW-NB15:**
-- Acessar https://research.unsw.edu.au/projects/unsw-nb15-dataset
-- Baixar a pasta "CSV Files" (9 arquivos)
-- Colocar todos os CSVs em `data/raw/unsw-nb15/`
+**UNSW-NB15:** https://research.unsw.edu.au/projects/unsw-nb15-dataset → pasta "CSV Files" em `data/raw/unsw-nb15/`
 
 ### 1.2 Rodar o Pipeline
 
 ```bash
-# Pipeline completo (ambos os datasets)
-python -m src.data.pipeline
-
-# Apenas um dataset (para testar)
-python -m src.data.pipeline --dataset cic
-python -m src.data.pipeline --dataset unsw
-
-# Teste rápido com 10% dos dados
-python -m src.data.pipeline --sample 0.1
+python -m src.data.pipeline                    # ambos os datasets
+python -m src.data.pipeline --dataset cic      # só CIC-IDS2017
+python -m src.data.pipeline --dataset unsw     # só UNSW-NB15
+python -m src.data.pipeline --sample 0.1       # teste rápido com 10%
 ```
 
-### 1.3 Saída Esperada
+### 1.3 Saída
 
-Em `data/processed/`:
-- `cic_ids2017_clean.parquet` — CIC-IDS2017 limpo (~2.4M registros, 65 colunas)
-- `unsw_nb15_clean.parquet` — UNSW-NB15 limpo (~2.5M registros, 38 colunas)
-- `unified_dataset.parquet` — Dataset unificado e normalizado (~5M registros)
-- `normalization_params.json` — Parâmetros para reproduzir a normalização
-- `preprocessing_report.json` — Relatório completo do pipeline
+Em `data/processed/`: arquivos Parquet (`cic_ids2017_clean`, `unsw_nb15_clean`, `unified_dataset`) + JSONs de relatório e parâmetros.
 
 ---
 
 ## Etapa 2 — Base de Conhecimento RAG
 
 ### Pré-requisitos
+- **Git** instalado (para clonar Sigma Rules)
+- **GPU recomendada** (funciona em CPU, mas é mais lento)
+- Dependências já no `requirements.txt`: `sentence-transformers`, `chromadb`, `pyyaml`
 
-- **Git** instalado (para clonar o repositório Sigma Rules)
-- **GPU recomendada** para gerar embeddings (funciona em CPU, mas é mais lento)
-- Dependências já incluídas no `requirements.txt`:
-  - `sentence-transformers` (modelo de embeddings)
-  - `chromadb` (banco vetorial)
-  - `pyyaml` (parser das Sigma Rules)
-
-### 2.1 Baixar as Fontes de Conhecimento
+### 2.1 Baixar as Fontes
 
 ```bash
 python -m src.rag.download
 ```
 
-Isso baixa:
-- **MITRE ATT&CK Enterprise** (~30MB) — taxonomia de táticas e técnicas adversárias
-- **Sigma Rules** (~50MB) — regras de detecção da comunidade
-
-Os arquivos ficam em `data/rag/sources/`.
-
 ### 2.2 Testar o Parsing (sem GPU)
-
-Para validar que as fontes foram baixadas e os parsers funcionam:
 
 ```bash
 python -m tests.test_rag_parsing
 ```
-
-Saída esperada: ~691 técnicas MITRE + ~3698 regras Sigma = ~4389 documentos.
 
 ### 2.3 Rodar o Pipeline RAG Completo
 
 ```bash
-# Pipeline completo com testes de busca
-python -m src.rag.pipeline --test
-
-# Só indexar (sem testes)
-python -m src.rag.pipeline
-
-# Re-indexar do zero (limpa a base antes)
-python -m src.rag.pipeline --reset --test
-
-# Pular download (se as fontes já estão baixadas)
+python -m src.rag.pipeline --test          # com testes de busca
+python -m src.rag.pipeline                 # só indexar
+python -m src.rag.pipeline --reset --test  # re-indexar do zero
 python -m src.rag.pipeline --skip-download --test
 ```
 
-Na primeira execução, o modelo `all-MiniLM-L6-v2` (~80MB) será baixado automaticamente.
+### 2.4 Saída
 
-### 2.4 Saída Esperada
-
-O pipeline gera em `data/rag/chromadb/` a base vetorial persistente com ~4389 documentos indexados.
-
-Os testes de busca (`--test`) mostram resultados como:
-```
-Query: "SSH brute force login attempts"
-  1. [mitre_attack] T1110 - Brute Force (distância: 0.35)
-  2. [sigma_rules] SSH Brute Force Detection (distância: 0.42)
-  3. [mitre_attack] T1021.004 - SSH (distância: 0.48)
-```
-
-Se as distâncias estiverem abaixo de ~0.7 e os resultados fizerem sentido semântico, o RAG está funcionando.
+Em `data/rag/chromadb/`: ~4.389 documentos indexados (691 técnicas MITRE + 3.698 regras Sigma).
 
 ---
 
-## Testes
+## Etapa 3 — Triagem com LLM
+
+### Pré-requisitos
+- **Ollama** instalado e rodando: https://ollama.com/download
+- **Modelo Foundation-Sec-8B-Instruct** baixado no Ollama
+- **Etapas 1 e 2 já concluídas** (datasets processados + base RAG indexada)
+- Dependência nova: `requests` (já no `requirements.txt`)
+
+### 3.1 Instalar e Iniciar o Modelo
 
 ```bash
-# Testes do pré-processamento (usa dados sintéticos, não precisa dos CSVs)
-pytest tests/test_preprocessor.py -v
+# Iniciar o servidor Ollama (deve estar rodando em background)
+ollama serve
 
-# Teste do parsing RAG (precisa ter rodado o download antes)
+# Em outro terminal, baixar o modelo
+ollama pull hf.co/fdtn-ai/Foundation-Sec-8B-Instruct
+
+# Conferir que está disponível
+ollama list
+```
+
+> **Nota:** se o modelo do Hugging Face não estiver disponível diretamente no
+> Ollama, vocês podem baixar o GGUF e importar manualmente, ou usar outro
+> modelo de cibersegurança disponível ajustando a variável `OLLAMA_MODEL` no `.env`.
+
+### 3.2 Configurar (opcional)
+
+Crie um `.env` na raiz se quiser sobrescrever os defaults:
+
+```env
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=hf.co/fdtn-ai/Foundation-Sec-8B-Instruct
+```
+
+### 3.3 Rodar Triagens
+
+```bash
+# Triar 10 registros aleatórios do dataset unificado
+python -m src.llm.pipeline --n 10
+
+# Triar 5 registros de cada classe (estratificado)
+python -m src.llm.pipeline --n 5 --stratified
+
+# Triar só registros do CIC-IDS2017
+python -m src.llm.pipeline --n 10 --dataset cic
+
+# Triar SEM RAG (baseline para avaliação)
+python -m src.llm.pipeline --n 10 --no-rag
+
+# Triar um registro específico pelo índice
+python -m src.llm.pipeline --index 12345
+
+# Salvar em arquivo específico
+python -m src.llm.pipeline --n 20 --output outputs/teste1.json
+```
+
+### 3.4 Saída
+
+Cada triagem gera um arquivo JSON em `outputs/` contendo:
+
+```json
+{
+  "n_records": 10,
+  "n_valid": 10,
+  "avg_elapsed_seconds": 8.4,
+  "results": [
+    {
+      "attack_type": "DDoS",
+      "severity": "critical",
+      "confidence": 0.92,
+      "mitre_techniques": ["T1498", "T1499.002"],
+      "explanation": "O fluxo apresenta...",
+      "recommendations": ["Mitigar com WAF", "Habilitar rate limiting"],
+      "record_description": "Fluxo TCP duração 0.5s, transferindo...",
+      "retrieved_context_titles": ["T1498 - Network DoS", ...],
+      "rag_distances": [0.37, 0.40, 0.47, 0.51, 0.55],
+      "ground_truth": "DDoS",
+      "elapsed_seconds": 7.2
+    }
+  ]
+}
+```
+
+E um resumo no console:
+```
+RESUMO DA TRIAGEM (10 registros)
+Acertos vs ground truth: 8/10 (80.0%)
+Distribuição de severidade: {'critical': 3, 'high': 2, 'low': 5}
+Tempo médio por triagem: 8.4s
+```
+
+---
+
+## Comandos Úteis (Resumo)
+
+```bash
+# Etapa 1 — Pré-processamento
+python -m src.data.pipeline
+
+# Etapa 2 — Construir base RAG
+python -m src.rag.download
+python -m src.rag.pipeline --test
+
+# Etapa 3 — Rodar triagem
+ollama serve  # em outro terminal
+python -m src.llm.pipeline --n 10 --stratified
+
+# Testes
 python -m tests.test_rag_parsing
+pytest tests/test_preprocessor.py -v
 ```
 
 ---
 
 ## Próximas Etapas
 
-- **Etapa 3:** Integração do pipeline completo (classificação + retrieval + geração com LLM)
-- **Etapa 4:** Interface Streamlit + avaliação + documentação final
+- **Etapa 4 (final):** Interface Streamlit, avaliação quantitativa (acurácia, precisão, recall, F1) e qualitativa (qualidade da explicação), análise comparativa com vs sem RAG, manuscrito final.
 
 ---
 

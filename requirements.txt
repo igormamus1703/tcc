@@ -11,7 +11,10 @@ sentence-transformers>=2.2
 chromadb>=0.4
 pyyaml>=6.0
 
-# ── Interface (será usada nas etapas seguintes) ──
+# ── Etapa 3: LLM via Ollama ──
+requests>=2.31
+
+# ── Interface (Etapa 4) ──
 streamlit>=1.30
 
 # ── Utilidades ──
@@ -19,6 +22,3 @@ python-dotenv>=1.0
 
 # ── Testes ──
 pytest>=7.4
-
-# ── Futuro: LLM ──
-# ollama>=0.1
